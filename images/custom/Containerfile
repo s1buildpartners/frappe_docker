@@ -1,5 +1,5 @@
 ARG PYTHON_VERSION=3.14.2
-ARG DEBIAN_BASE=bookworm
+ARG DEBIAN_BASE=trixie
 FROM python:${PYTHON_VERSION}-slim-${DEBIAN_BASE} AS base
 
 COPY resources/core/nginx/nginx-template.conf /templates/nginx/frappe.conf.template
@@ -45,7 +45,8 @@ RUN useradd -ms /bin/bash frappe \
     && . ${NVM_DIR}/nvm.sh \
     && nvm install ${NODE_VERSION} \
     && nvm use v${NODE_VERSION} \
-    && npm install -g yarn \
+    #&& npm install -g yarn \
+    && npm install -g yarn pnpm \
     && nvm alias default v${NODE_VERSION} \
     && rm -rf ${NVM_DIR}/.cache \
     && echo 'export NVM_DIR="/home/frappe/.nvm"' >>/home/frappe/.bashrc \
@@ -108,24 +109,20 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # apps.json includes
-ARG APPS_JSON_BASE64
-RUN if [ -n "${APPS_JSON_BASE64}" ]; then \
-    mkdir /opt/frappe && echo "${APPS_JSON_BASE64}" | base64 -d > /opt/frappe/apps.json; \
-  fi
+COPY apps /opt/frappe/
 
 USER frappe
 
 ARG FRAPPE_BRANCH=version-16
 ARG FRAPPE_PATH=https://github.com/frappe/frappe
-RUN export APP_INSTALL_ARGS="" && \
-  if [ -n "${APPS_JSON_BASE64}" ]; then \
-    export APP_INSTALL_ARGS="--apps_path=/opt/frappe/apps.json"; \
-  fi && \
-  bench init ${APP_INSTALL_ARGS}\
+RUN \
+  bench init \
+    --apps_path=/opt/frappe/apps.json \
     --frappe-branch=${FRAPPE_BRANCH} \
     --frappe-path=${FRAPPE_PATH} \
     --no-procfile \
     --no-backups \
+    --python=$(which python3) \
     --skip-redis-config-generation \
     --verbose \
     /home/frappe/frappe-bench && \
