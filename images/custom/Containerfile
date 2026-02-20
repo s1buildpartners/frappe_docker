@@ -80,7 +80,7 @@ RUN useradd -ms /bin/bash frappe \
 FROM base AS builder
 
 RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     # For frappe framework
     wget \
     #for building arm64 binaries
@@ -110,16 +110,17 @@ RUN apt-get update \
     libbz2-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# apps.json includes
-COPY apps /opt/frappe/
-
 USER frappe
 
-ARG FRAPPE_BRANCH=version-16
 ARG FRAPPE_PATH=https://github.com/frappe/frappe
-RUN \
+ARG FRAPPE_BRANCH=version-16
+ARG HELPDESK_BRANCH=develop
+ARG TELEPHONY_BRANCH=develop
+ARG DRIVE_BRANCH=develop
+ARG LMS_BRANCH=develop
+
+RUN set -xe && \
   bench init \
-    --apps_path=/opt/frappe/apps.json \
     --frappe-branch=${FRAPPE_BRANCH} \
     --frappe-path=${FRAPPE_PATH} \
     --no-procfile \
@@ -129,7 +130,26 @@ RUN \
     --verbose \
     /home/frappe/frappe-bench && \
   cd /home/frappe/frappe-bench && \
-  echo "{}" > sites/common_site_config.json && \
+  echo '{"socketio_port": 9000}' > sites/common_site_config.json && \
+  find apps -mindepth 1 -path "*/.git" | xargs rm -fr
+
+# install helpdesk
+RUN set -xe && \
+  cd /home/frappe/frappe-bench && \
+  bench get-app --branch ${TELEPHONY_BRANCH} telephony && \
+  bench get-app --branch ${HELPDESK_BRANCH} helpdesk && \
+  find apps -mindepth 1 -path "*/.git" | xargs rm -fr
+
+# install lms
+RUN set -xe && \
+  cd /home/frappe/frappe-bench && \
+  bench get-app --branch ${LMS_BRANCH} lms && \
+  find apps -mindepth 1 -path "*/.git" | xargs rm -fr
+
+# install drive
+RUN set -xe && \
+  cd /home/frappe/frappe-bench && \
+  bench get-app --branch ${DRIVE_BRANCH} drive && \
   find apps -mindepth 1 -path "*/.git" | xargs rm -fr
 
 FROM base AS backend
